@@ -1,0 +1,42 @@
+{
+  "name": "k-scaffold-jsx",
+  "version": "1.0.0",
+  "description": "A scaffold for roll20 using k-scaffold and jsx templating",
+  "main": "dist/build.js",
+  "exports": {
+    ".": "./dist/build.js",
+    "./template.js": "./dist/html/index.js",
+    "./script.js": "./dist/script/index.js"
+  },
+  "type": "module",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "",
+    "build:worker": "",
+    "prettier": "prettier --check .",
+    "prettier:fix": "prettier --write ."
+  },
+  "keywords": [
+    "roll20",
+    "sheet",
+    "generator"
+  ],
+  "author": "Zachary Haber",
+  "license": "ISC",
+  "dependencies": {
+    "clsx": "^1.2.1",
+    "esbuild": "^0.14.51",
+    "jsxte": "^2.0.0",
+    "sass": "^1.54.0",
+    "typescript": "^4.7.4"
+  },
+  "devDependencies": {
+    "@types/node": "^18.6.2",
+    "@types/underscore": "^1.11.4",
+    "prettier": "^2.7.1"
+  },
+  "files": [
+    "dist/*",
+    "package.json"
+  ]
+}
