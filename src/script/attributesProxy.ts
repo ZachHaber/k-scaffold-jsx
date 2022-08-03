@@ -1,7 +1,7 @@
 import { commaArray, parseTriggerName, Trigger } from '../utility.js';
 import { HandlerFunc, kvars } from './kvariables.js';
 import { kSetAttrs, kSetSectionOrder } from './sheetworkerAliases.js';
-import { debug } from './utility.js';
+import { debug, error } from './utility.js';
 import { attributeSets, cascades } from './_generated.js';
 
 export interface Attributes {
@@ -14,33 +14,35 @@ export type AttributesProxyBase = {
   /**
    * - Applies any updates to the sheet. Also applies any repeating section reorders. This uses ES6 destructuring function argument assignment so all arguments should be passed in as properties of a single object with the indicated keys (e.g. `attributes.set({vocal:true,callback:() => log('attributes were set')})`)
    */
-  set(obj?: {
-    /**
-     *  - set will not be silent. Inverts the standard behavior of setAttrs options object
-     */
-    vocal?: boolean;
-    attributes?: AttributesProxy;
-    sections?: Record<string, string[]>;
-    casc?: Cascade;
-    /**
-     * A callback to be invoked once the setAttrs is completed
-     */
-    callback?: () => // obj: {
-    // /**
-    //  * The instance of the attributeProxy to use for further set operations
-    //  */
-    // attributes?: AttributesProxy;
-    // /**
-    //  * An object containing the idArrays for each repeating section
-    //  */
-    // sections: object;
-    // /**
-    //  * as {@link AttributesProxy.casc the casc property}
-    //  */
-    // casc: Cascade;
-    // }
-    void;
-  }): void;
+  set(
+    this: AttributesProxy,
+    obj?: {
+      /**
+       *  - set will not be silent. Inverts the standard behavior of setAttrs options object
+       */
+      vocal?: boolean;
+      sections?: Record<string, string[]>;
+      casc?: Cascade;
+      /**
+       * A callback to be invoked once the setAttrs is completed
+       */
+      callback?: () => // obj: {
+      // /**
+      //  * The instance of the attributeProxy to use for further set operations
+      //  */
+      // attributes?: AttributesProxy;
+      // /**
+      //  * An object containing the idArrays for each repeating section
+      //  */
+      // sections: object;
+      // /**
+      //  * as {@link AttributesProxy.casc the casc property}
+      //  */
+      // casc: Cascade;
+      // }
+      void;
+    }
+  ): void;
   /**
    * The original attribute values from the getAttrs call
    */
@@ -64,19 +66,21 @@ export type AttributesProxyBase = {
   /**
    * function to iterate through attribute changes for default handling
    */
-  processChange: (data: {
-    event?: EventInfo;
-    trigger: Trigger;
-    attributes: AttributesProxy;
-    sections: Record<string, string[]>;
-    casc: Cascade;
-  }) => void;
+  processChange: (
+    this: AttributesProxy,
+    data: {
+      event?: EventInfo;
+      trigger: Trigger;
+      sections: Record<string, string[]>;
+      casc: Cascade;
+    }
+  ) => void;
   /**
    * Calls functions that are triggered whenever an attribute is changed or affected
    */
   triggerFunctions: (
+    this: AttributesProxy,
     trigger: Trigger,
-    attributes: AttributesProxy,
     sections: Record<string, string[]>,
     casc?: Cascade
   ) => void;
@@ -84,23 +88,23 @@ export type AttributesProxyBase = {
    * Calls functions that are only triggered when an attribute is the triggering event
    */
   initialFunction: (
+    this: AttributesProxy,
     trigger: Trigger,
-    attributes: AttributesProxy,
     sections: Record<string, string[]>,
     casc: Cascade
   ) => void;
   alwaysFunctions: (
+    this: AttributesProxy,
     trigger: Trigger,
-    attributes: AttributesProxy,
     sections: Record<string, string[]>,
     casc: Cascade
   ) => void;
   /**
    * Gets the appropriate cascade object for a given attribute or action button
    */
-  getCascObj: (event: EventInfo, casc: Cascade) => Trigger;
-  getRepOrder(section: string): string[];
-  setRepOrder(section: string, value: string[]): void;
+  getCascObj(this: AttributesProxy, event: EventInfo, casc: Cascade): Trigger;
+  getRepOrder(this: AttributesProxy, section: string): string[];
+  setRepOrder(this: AttributesProxy, section: string, value: string[]): void;
 };
 
 export type AttributesProxy = AttributesProxyBase & {
@@ -129,32 +133,32 @@ export function createAttrProxy(attrs: Attributes): AttributesProxy {
     setRepOrder(section, value) {
       this.attributes[`_reporder_${section}`] = value.join(',');
     },
-    set({ attributes, sections, casc, callback, vocal } = {}) {
-      if (attributes?.queue.length && sections && casc) {
-        const triggerName = attributes.queue.shift();
+    set({ sections, casc, callback, vocal } = {}) {
+      if (this.queue.length && sections && casc) {
+        const triggerName = this.queue.shift();
         if (triggerName) {
           const trigger = this.getCascObj(
             { sourceAttribute: triggerName } as any,
             casc
           );
-          this.processChange({ trigger, attributes, sections, casc });
-        } else {
-          debug({ updates: this.updates });
-          const trueCallback = Object.keys(this.repOrders).length
-            ? () => {
-                Object.entries(this.repOrders).forEach(([section, order]) => {
-                  kSetSectionOrder(section, order);
-                });
-                callback?.();
-              }
-            : callback;
-          Object.keys(this.updates).forEach(
-            (key) => (this.attributes[key] = this.updates[key])
-          );
-          const update = this.updates;
-          this.updates = {};
-          kSetAttrs(update as any, vocal, trueCallback);
+          this.processChange({ trigger, sections, casc });
         }
+      } else {
+        debug({ updates: this.updates });
+        const trueCallback = Object.keys(this.repOrders).length
+          ? () => {
+              Object.entries(this.repOrders).forEach(([section, order]) => {
+                kSetSectionOrder(section, order);
+              });
+              callback?.();
+            }
+          : callback;
+        Object.keys(this.updates).forEach(
+          (key) => (this.attributes[key] = this.updates[key])
+        );
+        const update = this.updates;
+        this.updates = {};
+        kSetAttrs(update as any, vocal, trueCallback);
       }
     },
     getCascObj(event, casc) {
@@ -166,68 +170,66 @@ export function createAttrProxy(attrs: Attributes): AttributesProxy {
         : 'attr_';
       return casc[`${typePrefix}${eventName.replace('clicked:', '')}`];
     },
-    triggerFunctions(trigger, attributes, sections) {
+    triggerFunctions(trigger, sections) {
       if (trigger.triggeredFuncs?.length) {
         debug(`triggering functions for ${trigger.name}`);
         trigger.triggeredFuncs.forEach((funcName) => {
           const func = kvars.funcs.get(funcName);
           if (!func) {
-            debug(
-              `!!!Warning!!! No function named ${funcName} found. Triggered function not called for ${trigger.name}`,
-              true
+            error(
+              `No function named ${funcName} found. Triggered function not called for ${trigger.name}`
             );
           } else {
-            func({ trigger, attributes, sections });
+            func({ trigger, attributes: this, sections });
           }
         });
       }
     },
-    initialFunction(trigger, attributes, sections, casc) {
+    initialFunction(trigger, sections) {
       if (trigger.initialFunc) {
         debug(`intial functions for ${trigger.name}`);
         const func = kvars.funcs.get(trigger.initialFunc);
         func
-          ? func({ trigger, attributes, sections })
-          : debug(
-              `!!!Warning!!! No function named ${trigger.initialFunc} found. Initial function not called for ${trigger.name}`,
-              true
+          ? func({ trigger, attributes: this, sections })
+          : error(
+              `No function named ${trigger.initialFunc} found. Initial function not called for ${trigger.name}`
             );
       }
     },
-    alwaysFunctions(trigger, attributes, sections, casc) {
+    alwaysFunctions(trigger, sections, casc) {
       // Define allHandlers!
       for (const handler of kvars.allHandlers.values()) {
-        handler({ trigger, attributes, sections, casc });
+        handler({ trigger, attributes: this, sections, casc });
       }
     },
-    processChange({ event, trigger, attributes, sections, casc }) {
+    processChange({ event, trigger, sections, casc }) {
       if (event && !trigger) {
         debug(`${event.sourceAttribute} change detected. No trigger found`);
         return;
       }
-      if (!attributes || !sections || !casc) {
-        debug(
-          `!!! Insufficient arguments || attributes > ${!!attributes} | sections > ${!!sections} | casc > ${!!casc} !!!`
+      if (!sections || !casc) {
+        error(
+          `!!! Insufficient arguments || sections > ${!!sections} | casc > ${!!casc} !!!`
         );
         return;
       }
       debug({ trigger });
       if (event) {
         debug('checking for initial functions');
-        this.alwaysFunctions(trigger, attributes, sections, casc); //Functions that should be run for all events.
-        this.initialFunction(trigger, attributes, sections, casc); //functions that should only be run if the attribute was the thing changed by the user
+        this.alwaysFunctions(trigger, sections, casc); //Functions that should be run for all events.
+        this.initialFunction(trigger, sections, casc); //functions that should only be run if the attribute was the thing changed by the user
       }
       if (trigger) {
         debug(`processing ${trigger.name}`);
-        this.triggerFunctions(trigger, attributes, sections, casc);
+        this.triggerFunctions(trigger, sections, casc);
         if (
           !event &&
           trigger.calculation &&
           kvars.funcs.has(trigger.calculation)
         ) {
-          attributes[trigger.name] = kvars.funcs.get(trigger.calculation)!({
+          this[trigger.name] = kvars.funcs.get(trigger.calculation)!({
             trigger,
-            attributes,
+            attributes: this,
             sections,
             casc,
           }) as string | number;
@@ -235,15 +237,13 @@ export function createAttrProxy(attrs: Attributes): AttributesProxy {
           trigger.calculation &&
           !kvars.funcs.has(trigger.calculation)
         ) {
-          debug(
-            `K-Scaffold Error: No function named ${trigger.calculation} found`
-          );
+          error(`Calculation: No function named ${trigger.calculation} found`);
         }
         if (Array.isArray(trigger.affects)) {
-          attributes.queue.push(...trigger.affects);
+          this.queue.push(...trigger.affects);
         }
       }
-      attributes.set({ attributes, sections, casc });
+      this.set({ sections, casc });
     },
   };
   return new Proxy(attrTarget as unknown as AttributesProxy, {
@@ -296,8 +296,8 @@ export function createAttrProxy(attrs: Attributes): AttributesProxy {
           target.updates[prop] = value;
         }
       } else {
-        debug(
-          `!!!Warning: Attempted to set ${prop} to an invalid value:${value}; value not stored!!!`
+        error(
+          `Attempted to set ${prop} to an invalid value:${value}; value not stored!!!`
         );
         return false;
       }
@@ -321,10 +321,10 @@ export function createAttrProxy(attrs: Attributes): AttributesProxy {
 
 /**
  * Function that registers a function for being called via the funcs object. Returns true if the function was successfully registered, and false if it could not be registered for any reason.
- * @param {object} funcObj - Object with keys that are names to register functions under and values that are functions.
- * @param {object} optionsObj - Object that contains options to use for this registration.
- * @param {string[]} optionsObj.type - Array that contains the types of specialized functions that apply to the functions being registered. Valid types are `"opener"`, `"updater"`, and `"default"`. `"default"` is always used, and never needs to be passed.
- * @returns {boolean} - True if the registration succeeded, false if it failed.
+ * @param funcObj - Object with keys that are names to register functions under and values that are functions.
+ * @param optionsObj - Object that contains options to use for this registration.
+ * @param optionsObj.type - Array that contains the types of specialized functions that apply to the functions being registered. Valid types are `"opener"`, `"updater"`, and `"default"`. `"default"` is always used, and never needs to be passed.
+ * @returns - True if the registration succeeded, false if it failed.
  * @example
  * //Basic Registration
  * const myFunc = function({trigger,attributes,sections,casc}){};
@@ -341,13 +341,12 @@ export function createAttrProxy(attrs: Attributes): AttributesProxy {
 export function registerFuncs(
   funcObj: Record<string, HandlerFunc>,
   optionsObj: {
-    type?: ('opener' | 'updater' | 'new' | 'all' | 'default')[];
+    /** Array that contains the types of specialized functions that apply to the functions being registered. Valid types are `"opener"`, `"updater"`, and `"default"`. `"default"` is always used, and never needs to be passed. */
+    type?: ('opener' | 'updater' | 'new' | 'all')[];
   } = {}
 ) {
   if (typeof funcObj !== 'object' || typeof optionsObj !== 'object') {
-    debug(
-      `!!!! K-scaffold error: Improper arguments to register functions !!!!`
-    );
+    error(`Improper arguments to register functions!`);
     return false;
   }
   const typeArr = optionsObj.type
@@ -370,14 +369,46 @@ export function registerFuncs(
         typeSwitch[type].set(prop, value);
         setState = setState !== false ? true : false;
       } else {
-        debug(
-          `!!! K-scaffold error: Function registration requires a function. Invalid value to register as ${type} !!!`
+        error(
+          `Function registration requires a function. Invalid value to register as ${type}!`
         );
         setState = false;
       }
     });
   });
   return setState;
+}
+
+/**
+ * Function that registers a function for being called via the funcs object. Returns true if the function was successfully registered, and false if it could not be registered for any reason.
+ * @param func - function to register, must be a named function
+ * @param optionsObj - Object that contains options to use for this registration.
+ * @param optionsObj.type - Array that contains the types of specialized functions that apply to the functions being registered. Valid types are `"opener"`, `"updater"`, and `"default"`. `"default"` is always used, and never needs to be passed.
+ * @returns - True if the registration succeeded, false if it failed.
+ * @example
+ * //Basic Registration
+ * registerFunc(function myFunc({trigger,attributes,sections,casc}){});
+ *
+ * //Register a function to run on sheet open
+ * registerFunc(function openFunc({trigger,attributes,sections,casc}){},{type:['opener']})
+ *
+ * //Register a function to run on all events
+ * registerFunc(function allFunc({trigger,attributes,sections,casc}){},{type:['all']})
+ */
+export function registerFunc(
+  func: HandlerFunc,
+  optionsObj: {
+    /** Array that contains the types of specialized functions that apply to the functions being registered. Valid types are `"opener"`, `"updater"`, and `"default"`. `"default"` is always used, and never needs to be passed. */
+    type?: ('opener' | 'updater' | 'new' | 'all')[];
+  } = {}
+) {
+  if (typeof func !== 'function' || !func.name) {
+    error(
+      `registerFunc must be passed a Function with a name. No anonymous or arrow functions!`
+    );
+    return false;
+  }
+  return registerFuncs({ [func.name]: func }, optionsObj);
 }
 
 export function setActionCalls({
@@ -416,7 +447,7 @@ export function callFunc(funcName: string, ...args: Parameters<HandlerFunc>) {
     debug(`calling ${funcName}`);
     return kvars.funcs.get(funcName)!(...args);
   } else {
-    debug(`Invalid function name: ${funcName}`);
+    error(`Missing function registration for: ${funcName}`);
     return null;
   }
 }

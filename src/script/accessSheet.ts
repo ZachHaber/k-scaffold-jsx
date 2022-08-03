@@ -49,7 +49,7 @@ export const accessSheet: ListenerFunc = (event) => {
   getAllAttrs({
     callback: (attributes, sections, casc) => {
       let trigger = attributes.getCascObj(event, casc);
-      attributes.processChange({ event, trigger, attributes, sections, casc });
+      attributes.processChange({ event, trigger, sections, casc });
     },
   });
 };

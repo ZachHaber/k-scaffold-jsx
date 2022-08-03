@@ -2,7 +2,7 @@ import { updateSheet } from './accessSheet.js';
 import { setActionCalls } from './attributesProxy.js';
 import { kvars } from './kvariables.js';
 import { getAllAttrs, _generateRowID } from './sheetworkerAliases.js';
-import { debug, log, parseClickTrigger } from './utility.js';
+import { debug, error, log, parseClickTrigger } from './utility.js';
 import { cascades } from './_generated.js';
 
 export function initializeKListeners() {
@@ -12,11 +12,28 @@ export function initializeKListeners() {
     if (kvars.listenerFuncs.has(funcName)) {
       on(event, kvars.listenerFuncs.get(funcName)!);
     } else {
-      debug(
-        `!!!Warning!!! no function named ${funcName} found. No listener created for ${event}`,
-        true
+      error(
+        `No function named "${funcName}" found. No listener created for ${event}`
       );
     }
+  }
+  for (const [name, trigger] of Object.entries(cascades)) {
+    (['calculation', 'triggeredFuncs', 'addFuncs', 'initialFunc'] as const)
+      .flatMap((n) => {
+        const val = trigger[n];
+        return !val
+          ? []
+          : Array.isArray(val)
+          ? val.map((val) => [n, val] as const)
+          : [[n, val] as const];
+      })
+      .forEach(([type, funcName]) => {
+        if (!kvars.funcs.has(funcName)) {
+          error(
+            `No function named "${funcName}" found. Specified in "${name}"->${type}`
+          );
+        }
+      });
   }
   log(`kScaffold Loaded`);
 }
@@ -43,7 +60,7 @@ kvars.listenerFuncs.set('addItem', (event) => {
           }
         });
       }
-      attributes.set({ attributes, sections, casc });
+      attributes.set({ sections, casc });
     },
   });
 });

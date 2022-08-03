@@ -41,29 +41,16 @@ export async function pseudoQuery(value: string | number): Promise<any> {
   return queryRoll.results.query.expression.replace(/^.+?response=|\]$/g, '');
 }
 
+export function error(msg: any): void {
+  console.error(`${kvars.sheetName}|`, msg);
+}
+
 /**
  * An alias for console.log.
  * @param msg The message can be a straight string, an object, or an array. If it is an object or array, the object will be broken down so that each key is used as a label to output followed by the value of that key. If the value of the key is an object or array, it will be output via `console.table`.
  */
 export function log(msg: any): void {
-  if (typeof msg === 'string') {
-    console.log(`%c${kvars.sheetName} log| ${msg}`, 'background-color:#159ccf');
-  } else if (typeof msg === 'object') {
-    Object.keys(msg).forEach((m) => {
-      if (typeof msg[m] === 'string') {
-        console.log(
-          `%c${kvars.sheetName} log| ${m}: ${msg[m]}`,
-          'background-color:#159ccf'
-        );
-      } else {
-        console.log(
-          `%c${kvars.sheetName} log| ${typeof msg[m]} ${m}`,
-          'background-color:#159ccf'
-        );
-        console.table(msg[m]);
-      }
-    });
-  }
+  console.log(`${kvars.sheetName}|`, msg);
 }
 
 /**
@@ -73,27 +60,7 @@ export function log(msg: any): void {
  */
 export function debug(msg: any, force?: boolean): void {
   if (!kvars.debugMode && !force && kvars.version > 0) return;
-  if (typeof msg === 'string') {
-    console.log(
-      `%c${kvars.sheetName} DEBUG| ${msg}`,
-      'background-color:tan;color:red;'
-    );
-  } else if (typeof msg === 'object') {
-    Object.keys(msg).forEach((m) => {
-      if (typeof msg[m] === 'string') {
-        console.log(
-          `%c${kvars.sheetName} DEBUG| ${m}: ${msg[m]}`,
-          'background-color:tan;color:red;'
-        );
-      } else {
-        console.log(
-          `%c${kvars.sheetName} DEBUG| ${typeof msg[m]} ${m}`,
-          'background-color:tan;color:red;font-weight:bold;'
-        );
-        console.table(msg[m]);
-      }
-    });
-  }
+  console.debug(`${kvars.sheetName}|`, msg);
 }
 
 /**

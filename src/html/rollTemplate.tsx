@@ -1,22 +1,25 @@
 import { default as clsx } from 'clsx';
+import { ReactNode } from 'react';
 
 export interface RollTemplateProps {
   name: string;
-  children?: JSXTE.ElementChildren;
+  children?: ReactNode;
 }
 /**
  * Roll Template Base
  */
 export function RollTemplate({ name, children }: RollTemplateProps) {
   return (
-    <rolltemplate class={`sheet-rolltemplate-${name}`}>{children}</rolltemplate>
+    <rolltemplate className={`sheet-rolltemplate-${name}`}>
+      {children}
+    </rolltemplate>
   );
 }
 
 export function RollTemplateWrapper({ name, children }: RollTemplateProps) {
   return (
     <RollTemplate name={name}>
-      <div class={`template ${name}`}>{children}</div>
+      <div className={`template ${name}`}>{children}</div>
     </RollTemplate>
   );
 }
@@ -25,10 +28,10 @@ export function MultiPartRollTemplate({ name, children }: RollTemplateProps) {
   return (
     <RollTemplate name={name}>
       <TemplateHelper func="rollBetween" values="computed::finished 0 0" invert>
-        <span class="finished" />
+        <span className="finished" />
       </TemplateHelper>
       <div
-        class={clsx(
+        className={clsx(
           'template',
           `${name}`,
           // Note: these are conditional classes that will be joined together,
@@ -47,13 +50,13 @@ export function CharacterLink() {
   return (
     <TemplateConditional fieldBool="character_name">
       <TemplateConditional fieldBool="character_id">
-        <h4 class="character_name">
+        <h4 className="character_name">
           [{'{{character_name}}'}](
           {'http://journal.roll20.net/character/{{character_id}}'})
         </h4>
       </TemplateConditional>
       <TemplateConditional fieldBool="chracter_id" invert>
-        <h4 class="character_name">{'{{character_name}}'}</h4>
+        <h4 className="character_name">{'{{character_name}}'}</h4>
       </TemplateConditional>
     </TemplateConditional>
   );
@@ -73,7 +76,7 @@ export function TemplateConditional({
 }: {
   fieldBool: string;
   invert?: boolean;
-  children?: JSXTE.ElementChildren;
+  children?: ReactNode;
 }) {
   return (
     <>
@@ -95,7 +98,7 @@ interface TemplateHelperProps {
   func?: TemplateHelperFunction;
   values?: string;
   invert?: boolean;
-  children?: JSXTE.ElementChildren;
+  children?: ReactNode;
 }
 export function TemplateHelper({
   func,

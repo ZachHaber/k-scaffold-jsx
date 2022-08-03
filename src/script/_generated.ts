@@ -6,7 +6,7 @@ export const cascades: { [name: string]: Trigger } = deserialize(
 export const repeatingSectionDetails: { section: string; fields: string[] }[] =
   deserialize(`[]`);
 export const attributeSets: Record<
-  'actions' | 'attributes' | '',
+  'actions' | 'attributes' | string,
   Set<string>
 > = deserialize(
   `{"actions":{"@@prototype":"Set","value":[]},"attributes":{"@@prototype":"Set","value":[]}}`

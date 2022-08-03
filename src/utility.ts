@@ -1,13 +1,45 @@
 export interface Trigger {
+  /**
+   * The name of the attribute without the `act_` or `attr_` prefix.
+   */
   name: string;
+  /**
+   * the type of the attribute. Autopopulated from the `type` property from the attribute definition in the HTML
+   */
   type?: string;
+  /**
+   * attribute names that this value will affect, continues the cascade
+   */
   affects?: string[];
+  /**
+   * The listener text to be used in a [roll20 event listener](https://wiki.roll20.net/Sheet_Worker_Scripts#Event_listener)
+   */
   listener?: string;
+  /**
+   * Name of the function to call from the [roll20 event listener](https://wiki.roll20.net/Sheet_Worker_Scripts#Event_listener). It's used as a string to call the function from the {@link kvars.funcs} map.
+   */
   listenerFunc?: string;
+  /**
+   * Array of function names that should be called any time this attribute is changed or affected.
+   */
   triggeredFuncs?: string[];
+  /**
+   * Array of function names that should be called any time the `addItem` listenerFunc is called.
+   *
+   * Which should be used when a new item is added to a Repeater
+   */
   addFuncs?: string[];
+  /**
+   *  Name of function to call only when the attribute is the change event that triggered the listener.
+   */
   initialFunc?: string;
+  /**
+   * The default value of the attribute. Not used for buttons. Autopopulated from the `value` property of the HTML definition of the attribute.
+   */
   defaultValue?: string | number;
+  /**
+   * Name of function to call to calculate the value of this attribute.
+   */
   calculation?: string;
 }
 
@@ -35,6 +67,32 @@ export function toNumber(
   def?: number
 ): number | undefined {
   return +val || def || 0;
+}
+
+export type RepeaterBaseName = `repeating_${string}`;
+
+export function toRepeaterBaseName(section: string): RepeaterBaseName {
+  if (isRepeaterGenericName(section)) {
+    return section.slice(0, -4) as RepeaterBaseName;
+  }
+  return `repeating_${section}`;
+}
+export function isRepeaterBaseName(string: string): string is RepeaterBaseName {
+  return string.startsWith('repeating_') && !string.endsWith('_$X_');
+}
+export type RepeaterGenericName = `${RepeaterBaseName}_$X_`;
+export function isRepeaterGenericName(
+  string: string
+): string is RepeaterGenericName {
+  return string.startsWith('repeating_') && string.endsWith('_$X_');
+}
+export function toRepeaterGenericName(
+  section: string | RepeaterBaseName
+): RepeaterGenericName {
+  if (isRepeaterBaseName(section)) {
+    return `${section}_$X_`;
+  }
+  return `repeating_${section}_$X_`;
 }
 
 /**

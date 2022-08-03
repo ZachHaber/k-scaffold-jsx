@@ -1,24 +1,27 @@
 import esbuild from 'esbuild';
+import { renderToStaticMarkup } from 'react-dom/server';
 import fs from 'fs/promises';
-import { renderToHtml } from 'jsxte';
 import { dirname, join } from 'path';
 import sass from 'sass';
 import { varObjects } from './html/htmlElements.js';
 import { serialize } from './utility.js';
+import { default as json5 } from 'json5';
 
 export async function build({
   scriptEntry,
   outputDir,
   app,
   styleEntry,
+  translationEntry,
 }: {
   scriptEntry?: string;
+  styleEntry?: string;
+  translationEntry?: string;
   outputDir: string;
   app: () => JSX.Element;
-  styleEntry?: string;
 }) {
   try {
-    let html = renderToHtml(app());
+    let html = renderToStaticMarkup(app());
     const path = join(outputDir, 'system');
     await fs.mkdir(dirname(path), { recursive: true });
     await fs.writeFile(
@@ -33,6 +36,25 @@ export async function build({
     export const attributeSets = deserialize(\`${serialize(
       Object.fromEntries(varObjects.varData)
     )}\`)
+    `
+    );
+    await fs.writeFile(
+      new URL('./script/_generated.d.ts', import.meta.url),
+      `
+      // This file is auto-generated as part of the build
+      import { Trigger } from '../utility.js';
+      export declare const cascades: {
+          [name: string]: Trigger;
+      };
+      export declare const repeatingSectionDetails: {
+          section: string;
+          fields: string[];
+      }[];
+      export declare const attributeSets: Record<${Array.from(
+        varObjects.varData.keys()
+      )
+        .map((k) => `'${k}'`)
+        .join('|')}, Set<string>>;
     `
     );
     // await fs.writeFile(
@@ -69,6 +91,13 @@ export async function build({
     if (styleEntry) {
       const styles = sass.compile(styleEntry);
       await fs.writeFile(`${path}.css`, styles.css);
+    }
+    if (translationEntry) {
+      const json = await fs.readFile(translationEntry);
+      await fs.writeFile(
+        join(outputDir, 'translation.json'),
+        JSON.stringify(json5.parse(json.toString()), undefined, 2)
+      );
     }
   } catch (error) {
     console.error(error);
