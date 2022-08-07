@@ -7,12 +7,14 @@ import {
   ReactElement,
   ReactNode,
 } from 'react';
+import { isElement } from 'react-is';
 import {
   range,
   toRepeaterBaseName,
   toRepeaterGenericName,
   Trigger,
 } from '../utility.js';
+import { createSlot } from './components/Slot.js';
 import {
   radioContext,
   repeaterContext,
@@ -20,6 +22,7 @@ import {
   useRepeaterContext,
 } from './contexts.js';
 import './jsxExtension.js';
+import { flattenChildren } from './utils/flattenChildren.js';
 
 export type BaseHtmlAttributes = HTMLAttributes<HTMLElement>;
 
@@ -36,7 +39,7 @@ export const varObjects: {
 } = {
   repeatingSectionDetails: [],
   varData: new Map<string, Set<string>>([
-    ['actionAttributes', new Set()],
+    ['actions', new Set()],
     ['attributes', new Set()],
   ]),
   cascades: {
@@ -63,6 +66,18 @@ export interface LabelWrapperBase {
   labelProps?: BaseHtmlAttributes;
   wrapperProps?: BaseHtmlAttributes;
 }
+export interface LabelWrapperBase2
+  extends Omit<
+    BaseHtmlAttributes,
+    'children' | 'value' | 'defaultValue' | 'defaultChecked' | 'checked'
+  > {
+  label: string;
+}
+
+const BaseLabelSlot = createSlot<
+  {},
+  { className: string; 'data-i18n': string }
+>('label');
 
 type JSXInputProps = JSX.IntrinsicElements['input'];
 export interface InputProps
@@ -264,12 +279,14 @@ interface SelectProps
    * Adds a placeholder option that's selected by default and doesn't show in the menu
    */
   placeholder?: string;
+  'data-i18n-placeholder'?: string;
   defaultValue?: string;
 }
 export function Select({
   children,
   placeholder,
-  defaultValue = placeholder ? '' : undefined,
+  'data-i18n-placeholder': i18nPlaceholder,
+  defaultValue = placeholder || i18nPlaceholder ? '' : undefined,
   ...props
 }: SelectProps) {
   // props.className = replaceProblems(props.className);
@@ -280,13 +297,14 @@ export function Select({
 
   useAddFieldToFieldsetObj(props.name, repeatingPrefix);
   storeTrigger({ ...props, type: 'select' });
+  const hasPlaceholder = Boolean(placeholder || i18nPlaceholder);
   if (!children && !placeholder) {
     throw new TypeError(`Select missing props`);
   }
   return (
     <select {...props} defaultValue={defaultValue}>
-      {!!placeholder && (
-        <option value="" disabled hidden>
+      {hasPlaceholder && (
+        <option value="" disabled hidden data-i18n={i18nPlaceholder}>
           {placeholder}
         </option>
       )}
@@ -409,11 +427,11 @@ export function Roller({
   // attrName will get converted by actionButtonName in Button by default.
   // const actionName = actionButtonName(attrName);
   const repeatingPrefix = useRepeaterContext();
-  addIfUnique('actionAttributes', `${repeatingPrefix}${attrName}`);
+  addIfUnique('actions', `${repeatingPrefix}${attrName}`);
   const buttonProps: ButtonProps = {
     ...props,
     className: clsx(className, 'roller'),
-    value: `@${attrName}`,
+    value: `@{${attrName}}`,
   };
   return (
     <>
@@ -440,6 +458,10 @@ export interface RepeaterProps {
    */
   name: string;
   /**
+   * Include a {@link Collapse `<Collapse />`}?
+   */
+  collapsing?: boolean;
+  /**
    * Trigger that defines how to handle the removal of a row from the fieldset. `Optional`
    */
   trigger?: TriggerDefinition;
@@ -457,6 +479,7 @@ export function Repeater({
   name,
   trigger,
   className,
+  collapsing,
   children,
 }: RepeaterProps) {
   const parentRepeater = useRepeaterContext();
@@ -476,7 +499,10 @@ export function Repeater({
   return (
     <repeaterContext.Provider value={toRepeaterGenericName(section)}>
       {className ? <span hidden className={className} /> : undefined}
-      <fieldset className={section}>{children}</fieldset>
+      <fieldset className={section}>
+        {Boolean(collapsing) && <Collapse />}
+        {children}
+      </fieldset>
     </repeaterContext.Provider>
   );
 }
@@ -493,7 +519,7 @@ export function CustomControlRepeater(props: RepeaterProps) {
         trigger={{ listenerFunc: 'addItem' }}
       />
       <Action
-        name={`add ${props.name}`}
+        name={`edit ${props.name}`}
         className={clsx(repeaterControlClass, repeaterControlClass + '--edit')}
         trigger={{ listenerFunc: 'editSection' }}
       />
@@ -501,63 +527,152 @@ export function CustomControlRepeater(props: RepeaterProps) {
     </>
   );
 }
-export interface RepeatingSectionProps extends RepeaterProps {
+
+export interface SheetSectionProps extends Omit<BaseHtmlAttributes, 'id'> {
+  /**
+   * The name of the section. This name will also be added to the section's class list as `NAME`. If no id argument is passed, this is also used as the id of the section.
+   */
+  name: string;
+  /**
+   * The translation key for the header label
+   * @default {name}
+   */
+  label?: string;
+  /**
+   * An id to use for the section element.
+   * @default {name}
+   */
+  id?: string;
+}
+
+/**
+ * A mixin that creates a section element with an h2, a space for column headers, and a {@link CustomControlRepeater} which can be styled to fit those column headers. The h2 labels the section via `aria-labelledby`.
+ */
+export function SheetSection({
+  name,
+  label = name,
+  id = name,
+  children,
+  ...wrapperProps
+}: SheetSectionProps) {
+  const flatChildren = flattenChildren(children);
+
+  let labelSlot: ReactElement = <h3 />;
+  const defaultSlot = flatChildren.map((baseChild) => {
+    if (!isElement(baseChild)) {
+      return undefined;
+    }
+    if (baseChild.type === BaseLabelSlot) {
+      labelSlot = baseChild;
+      return undefined;
+    }
+    return baseChild;
+  });
+  labelSlot = cloneElement(labelSlot, {
+    className: clsx(labelSlot.props.className, 'section--header'),
+    id: labelSlot.props.id ?? `${id}-header`,
+    'data-i18n': labelSlot.props['data-118n'] ?? label,
+  });
+
+  const fixedName = replaceProblems(name);
+
+  return (
+    <section
+      {...wrapperProps}
+      id={id}
+      className={clsx(wrapperProps?.className, 'section', fixedName)}
+      aria-labelledby={labelSlot.props.id}
+    >
+      {labelSlot}
+      {defaultSlot}
+    </section>
+  );
+}
+SheetSection.Label = BaseLabelSlot;
+
+export interface RepeatingSectionProps
+  extends Omit<RepeaterProps, 'className'>,
+    Omit<BaseHtmlAttributes, 'id' | 'children'> {
   /**
    * The name of the section as per {@link Repeater}. This name will also be added to the section's class list as `repeating-container--NAME`. If no id argument is passed, this is also used as the id of the section.
    */
   name: string;
   /**
-   * The translation key for the h2 element in the section
-   * Or a JSX Element to use as the header
+   * The translation key for the header label
    */
-  header: ReactNode;
-  /**
-   * Array of translation keys to use as column headers. These are added as h5's by default.
-   */
-  columnArr: string[];
-  /**
-   * An Element to clone for use with the column headers. Each will get `data-i18n` passed from the columnArr
-   */
-  columnTag?: ReactElement;
+  label?: string;
   /**
    * An id to use for the section element.
+   * @default {RepeatingSectionProps.name}
    */
-  id: string;
-  wrapperProps?: Omit<BaseHtmlAttributes, 'id' | 'children'>;
+  id?: string;
 }
 /**
  * A mixin that creates a section element with an h2, a space for column headers, and a {@link CustomControlRepeater} which can be styled to fit those column headers. The h2 labels the section via `aria-labelledby`.
  */
 export function RepeatingSection({
   name,
-  header,
-  columnArr,
-  id,
-  columnTag = <h5 />,
-  wrapperProps,
-  ...props
+  label = name,
+  id = name,
+  children,
+  trigger,
+  collapsing,
+  ...wrapperProps
 }: RepeatingSectionProps) {
-  <section
-    {...wrapperProps}
-    id={id}
-    className={clsx(
-      wrapperProps?.className,
-      'section',
-      'repeating-container',
-      `repeating-container--${replaceProblems(name)}`
-    )}
-  >
-    {typeof header === 'string' ? <h2 data-i18n={header} /> : header}
-    {!!columnArr && (
-      <div className="repeat-columns">
-        {columnArr.map((col) =>
-          cloneElement(columnTag, { ['data-i18n']: col, key: col })
-        )}
-      </div>
-    )}
-    <CustomControlRepeater {...props} name={name} />
-  </section>;
+  const flatChildren = flattenChildren(children);
+
+  let labelSlot: ReactElement = <h3 />;
+  let outsideSlot: ReactElement | undefined = undefined;
+  const repeatingChildren = flatChildren.map((baseChild, index) => {
+    if (!isElement(baseChild)) {
+      return undefined;
+    }
+    if (baseChild.type === BaseLabelSlot) {
+      labelSlot = baseChild;
+      return undefined;
+    }
+    if (baseChild.type === RepeatingSection.NonRepeating) {
+      outsideSlot = baseChild;
+      return undefined;
+    }
+
+    return baseChild;
+  });
+  labelSlot = cloneElement(labelSlot, {
+    className: clsx(labelSlot.props.className, 'section--header'),
+    id: labelSlot.props.id ?? `${id}-header`,
+    'data-i18n': labelSlot.props['data-118n'] ?? label,
+  });
+
+  const fixedName = replaceProblems(name);
+
+  return (
+    <section
+      {...wrapperProps}
+      id={id}
+      className={clsx(
+        wrapperProps?.className,
+        'section',
+        'repeating-container',
+        `repeating-container--${fixedName}`,
+        fixedName
+      )}
+      aria-labelledby={labelSlot.props.id}
+    >
+      {labelSlot}
+      {outsideSlot}
+      <CustomControlRepeater
+        trigger={trigger}
+        name={name}
+        collapsing={collapsing}
+      >
+        {repeatingChildren}
+      </CustomControlRepeater>
+    </section>
+  );
 }
+RepeatingSection.Label = BaseLabelSlot;
+RepeatingSection.NonRepeating = createSlot('NonRepeating');
 
 /**
  * An alias for {@link Repeater} that creates a fieldset with an added class that can be easily hooked into via CSS to style the fieldset for inline display.
@@ -698,72 +813,40 @@ export function ActionLabel(props: Omit<ButtonLabelProps, 'type'>) {
 }
 
 export type JSXLabelProps = JSX.IntrinsicElements['label'];
-
-export interface SelectLabelProps extends SelectProps, LabelWrapperBase {}
-
-export function SelectLabel({
-  wrapperProps: wrapperProps,
-  label,
-  labelProps: labelProps,
-  ...selectProps
-}: SelectLabelProps) {
-  return (
-    <label
-      {...wrapperProps}
-      className={clsx(wrapperProps?.className, 'input-label')}
-    >
-      <Span
-        {...labelProps}
-        data-i18n={label}
-        className={(clsx(labelProps?.className), 'input-label__text')}
-      />
-      <Select
-        {...selectProps}
-        className={clsx(selectProps.className, 'input-label__input')}
-      ></Select>
-    </label>
-  );
-}
-
-export interface InputLabelProps
-  extends InputProps,
-    PartPartial<LabelWrapperBase, 'label'> {}
-
 export function InputLabel({
-  name,
-  label = name,
-  wrapperProps,
-  labelProps,
-  ...inputProps
-}: InputLabelProps) {
-  return (
-    <label
-      {...wrapperProps}
-      className={clsx(wrapperProps?.className, 'input-label')}
-    >
-      <Span
-        {...labelProps}
-        data-i18n={label}
-        className={(clsx(labelProps?.className), 'input-label__text')}
-      />
-      <Input
-        {...inputProps}
-        name={name}
-        className={clsx(inputProps.className, 'input-label__input')}
-      />
-    </label>
-  );
-}
-
-export function MultiInputLabel({
   label,
-  wrapperProps,
-  labelProps,
   children,
+  ...wrapperProps
 }: {
   children: ReactNode;
-} & LabelWrapperBase) {
-  const numChildren = Children.count(children);
+} & PartPartial<LabelWrapperBase2, 'label'>) {
+  const flatChildren = flattenChildren(children);
+
+  // const numChildren = flatChildren.length;
+  let labelSlot: ReactElement = <span />;
+  const inputs = flatChildren.map((baseChild, index) => {
+    if (!isElement(baseChild)) {
+      return undefined;
+    }
+    if (baseChild.type === InputLabel.Label) {
+      labelSlot = baseChild;
+      return undefined;
+    }
+    label ??= baseChild.props.name;
+    const child = cloneElement(baseChild, {
+      className: clsx('input-label__input', baseChild.props.className),
+    });
+    if (index < flatChildren.length - 1) {
+      // Might need to escape out this slash...
+      return [child, <span className="slash h2">/</span>];
+    }
+    return child;
+  });
+  labelSlot = cloneElement(labelSlot, {
+    className: clsx(labelSlot.props.className, 'input-label__text'),
+    'data-i18n': labelSlot.props['data-118n'] ?? label,
+  });
+  const numChildren = inputs.length;
   return (
     <label
       {...wrapperProps}
@@ -772,47 +855,60 @@ export function MultiInputLabel({
         'input-label--multi': numChildren > 2,
       })}
     >
-      <Span
-        {...labelProps}
-        data-i18n={label}
-        className={(clsx(labelProps?.className), 'input-label__text')}
-      />
-      {Children.map(children, (child, index) => {
-        if (index < numChildren) {
-          // Might need to escape out this slash...
-          return [child, <span className="slash h2">/</span>];
-        }
-        return child;
-      })}
+      {labelSlot}
+      {inputs}
     </label>
   );
 }
 
-export interface HeadedTextareaProps extends TextareaProps, LabelWrapperBase {}
+InputLabel.Label = BaseLabelSlot;
+
+export interface HeadedTextareaProps extends LabelWrapperBase2 {
+  expanding?: boolean;
+  children: ReactNode;
+}
 
 export function HeadedTextarea({
-  wrapperProps,
   label,
-  labelProps,
-  ...textProps
-}: HeadedTextareaProps) {
+  children,
+  expanding,
+  ...wrapperProps
+}: PartPartial<HeadedTextareaProps, 'label'>) {
+  const flatChildren = flattenChildren(children);
+  let extraClass: string | undefined = undefined;
+  let labelSlot: ReactElement = <h5 />;
+  const textarea = flatChildren.map((baseChild, index) => {
+    if (!isElement(baseChild)) {
+      return undefined;
+    }
+    if (baseChild.type === InputLabel.Label) {
+      labelSlot = baseChild;
+      return undefined;
+    }
+    label ??= baseChild.props.name;
+    extraClass ??= baseChild.props.name;
+    const child = cloneElement(baseChild, {
+      className: clsx('headed-textarea__textarea', baseChild.props.className),
+    });
+    return child;
+  });
+  labelSlot = cloneElement(labelSlot, {
+    className: clsx(labelSlot.props.className, 'headed-textarea__header'),
+    'data-i18n': labelSlot.props['data-118n'] ?? label,
+  });
   return (
     <div
       {...wrapperProps}
-      className={clsx(wrapperProps?.className, 'headed-textarea')}
+      className={clsx(wrapperProps?.className, extraClass, 'headed-textarea', {
+        expanded: expanding,
+      })}
     >
-      <h3
-        {...labelProps}
-        data-i18n={label}
-        className={clsx(labelProps?.className, 'headed-textarea__header')}
-      />
-      <Textarea
-        {...textProps}
-        className={clsx(textProps.className, 'headed-textarea__textarea')}
-      />
+      {labelSlot}
+      {textarea}
     </div>
   );
 }
+HeadedTextarea.Label = BaseLabelSlot;
 
 export function AdaptiveTextarea({
   wrapperProps,
@@ -956,7 +1052,7 @@ const titleToName = (string: string) =>
   string.replace(/(?:^[@%]\{)|(?:\}$)/g, '');
 
 const addIfUnique = (
-  arrName: 'navButtons' | 'actionAttributes' | 'inlineFieldsets',
+  arrName: 'navButtons' | 'actions' | 'inlineFieldsets',
   item: string
 ) => {
   const set = varObjects.varData.get(arrName);

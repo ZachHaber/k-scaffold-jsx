@@ -7,7 +7,12 @@ import { cascades } from './_generated.js';
 
 export function initializeKListeners() {
   on('sheet:opened', updateSheet);
-  debug({ funcKeys: kvars.funcs.keys(), funcs: kvars.funcs });
+  debug({
+    funcKeys: kvars.funcs.keys(),
+    funcs: kvars.funcs,
+    listeners: kvars.listeners,
+    listenerFuncs: kvars.listenerFuncs,
+  });
   for (const [event, funcName] of kvars.listeners) {
     if (kvars.listenerFuncs.has(funcName)) {
       on(event, kvars.listenerFuncs.get(funcName)!);
@@ -44,7 +49,7 @@ kvars.listenerFuncs.set('addItem', (event) => {
   getAllAttrs({
     callback: (attributes, sections, casc) => {
       let row = _generateRowID(section, sections);
-      debug({ row });
+      debug('addItem', { section, row, event });
       attributes[`${row}_name`] = '';
       setActionCalls({ attributes, sections });
       const trigger = cascades[`fieldset_repeating_${section}`];
@@ -67,6 +72,7 @@ kvars.listenerFuncs.set('addItem', (event) => {
 
 kvars.listenerFuncs.set('editSection', (event) => {
   let [, , section] = parseClickTrigger(event.triggerName);
+  debug('editSection', { section, event });
   section = section.replace(/edit-/, '');
   let target = `fieldset.repeating_${section} + .repcontainer`;
   $20(target).toggleClass('ui-sortable editmode');

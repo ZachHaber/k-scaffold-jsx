@@ -41,16 +41,16 @@ export async function pseudoQuery(value: string | number): Promise<any> {
   return queryRoll.results.query.expression.replace(/^.+?response=|\]$/g, '');
 }
 
-export function error(msg: any): void {
-  console.error(`${kvars.sheetName}|`, msg);
+export function error(...msg: any[]): void {
+  console.error(`${kvars.sheetName}|`, ...msg);
 }
 
 /**
  * An alias for console.log.
  * @param msg The message can be a straight string, an object, or an array. If it is an object or array, the object will be broken down so that each key is used as a label to output followed by the value of that key. If the value of the key is an object or array, it will be output via `console.table`.
  */
-export function log(msg: any): void {
-  console.log(`${kvars.sheetName}|`, msg);
+export function log(...msg: any[]): void {
+  console.log(`${kvars.sheetName}|`, ...msg);
 }
 
 /**
@@ -58,9 +58,9 @@ export function log(msg: any): void {
  * @param msg 'See {@link k.log}
  * @param force Pass as a truthy value to force the debug output to be output to the console regardless of debug mode.
  */
-export function debug(msg: any, force?: boolean): void {
-  if (!kvars.debugMode && !force && kvars.version > 0) return;
-  console.debug(`${kvars.sheetName}|`, msg);
+export function debug(...msg: any[]): void {
+  if (!kvars.debugMode && kvars.version > 0) return;
+  console.debug(`${kvars.sheetName}|`, ...msg);
 }
 
 /**

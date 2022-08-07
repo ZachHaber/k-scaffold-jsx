@@ -1,5 +1,5 @@
 import { commaArray, parseTriggerName, Trigger } from '../utility.js';
-import { HandlerFunc, kvars } from './kvariables.js';
+import { HandlerFunc, kvars, ListenerFunc } from './kvariables.js';
 import { kSetAttrs, kSetSectionOrder } from './sheetworkerAliases.js';
 import { debug, error } from './utility.js';
 import { attributeSets, cascades } from './_generated.js';
@@ -162,13 +162,16 @@ export function createAttrProxy(attrs: Attributes): AttributesProxy {
       }
     },
     getCascObj(event, casc) {
-      const eventName = event.triggerName || event.sourceAttribute;
-      const typePrefix = eventName.startsWith('clicked:')
-        ? 'act_'
-        : event.removedInfo
-        ? 'fieldset_'
-        : 'attr_';
-      return casc[`${typePrefix}${eventName.replace('clicked:', '')}`];
+      let eventName = event.triggerName || event.sourceAttribute;
+      let typePrefix = 'attr_';
+      if (eventName.startsWith('clicked:')) {
+        typePrefix = 'act_';
+        eventName = eventName.replace('clicked:', '');
+      } else if (event.removedInfo) {
+        typePrefix = 'fieldset_';
+        eventName = eventName.replace('remove:', '');
+      }
+      return casc[`${typePrefix}${eventName}`];
     },
     triggerFunctions(trigger, sections) {
       if (trigger.triggeredFuncs?.length) {
@@ -203,6 +206,7 @@ export function createAttrProxy(attrs: Attributes): AttributesProxy {
       }
     },
     processChange({ event, trigger, sections, casc }) {
+      debug(`processing ${trigger?.name}`, { trigger, event, sections, casc });
       if (event && !trigger) {
         debug(`${event.sourceAttribute} change detected. No trigger found`);
         return;
@@ -213,14 +217,12 @@ export function createAttrProxy(attrs: Attributes): AttributesProxy {
         );
         return;
       }
-      debug({ trigger });
       if (event) {
         debug('checking for initial functions');
         this.alwaysFunctions(trigger, sections, casc); //Functions that should be run for all events.
         this.initialFunction(trigger, sections, casc); //functions that should only be run if the attribute was the thing changed by the user
       }
       if (trigger) {
-        debug(`processing ${trigger.name}`);
         this.triggerFunctions(trigger, sections, casc);
         if (
           !event &&
@@ -343,21 +345,48 @@ export function registerFuncs(
   optionsObj: {
     /** Array that contains the types of specialized functions that apply to the functions being registered. Valid types are `"opener"`, `"updater"`, and `"default"`. `"default"` is always used, and never needs to be passed. */
     type?: ('opener' | 'updater' | 'new' | 'all')[];
+  }
+): boolean;
+/**
+ * Function that registers a listener function for being called via the funcs object. Returns true if the function was successfully registered, and false if it could not be registered for any reason.
+ * @param funcObj - Object with keys that are names to register functions under and values that are functions.
+ * @param optionsObj - Object that contains options to use for this registration.
+ * @returns - True if the registration succeeded, false if it failed.
+ * @example
+ * //Basic Registration
+ * const myFunc = function(event){};
+ * k.registerFuncs({myFunc},{type:'listener'});
+ */
+export function registerFuncs(
+  funcObj: Record<string, ListenerFunc>,
+  optionsObj: {
+    /** To register a listener, must be 'listener' */
+    type: 'listener';
+  }
+): boolean;
+export function registerFuncs(
+  funcObj: Record<string, HandlerFunc> | Record<string, ListenerFunc>,
+  optionsObj: {
+    type?: ('opener' | 'updater' | 'new' | 'all')[] | 'listener';
   } = {}
 ) {
   if (typeof funcObj !== 'object' || typeof optionsObj !== 'object') {
     error(`Improper arguments to register functions!`);
     return false;
   }
-  const typeArr = optionsObj.type
-    ? ['default' as const, ...optionsObj.type]
-    : ['default' as const];
+  const typeArr =
+    optionsObj.type === 'listener'
+      ? ['listener' as const]
+      : optionsObj.type
+      ? ['default' as const, ...optionsObj.type]
+      : ['default' as const];
   const typeSwitch = {
     opener: kvars.openHandlers,
     updater: kvars.updateHandlers,
     new: kvars.initialSetups,
     all: kvars.allHandlers,
     default: kvars.funcs,
+    listener: kvars.listenerFuncs,
   };
   let setState: boolean = false;
   Object.entries(funcObj).map(([prop, value]) => {
@@ -397,18 +426,49 @@ export function registerFuncs(
  */
 export function registerFunc(
   func: HandlerFunc,
-  optionsObj: {
+  optionsObj?: {
     /** Array that contains the types of specialized functions that apply to the functions being registered. Valid types are `"opener"`, `"updater"`, and `"default"`. `"default"` is always used, and never needs to be passed. */
     type?: ('opener' | 'updater' | 'new' | 'all')[];
+  }
+): boolean;
+/**
+ * Function that registers a function for being called via the funcs object. Returns true if the function was successfully registered, and false if it could not be registered for any reason.
+ * @param func - function to register, must be a named function
+ * @param optionsObj - Object that contains options to use for this registration.
+ * @returns - True if the registration succeeded, false if it failed.
+ * @example
+ * //Basic Registration
+ * registerFunc(function myListener(event){});
+ */
+export function registerFunc(
+  func: ListenerFunc,
+  optionsObj: {
+    /** Array that contains the types of specialized functions that apply to the functions being registered. Valid types are `"opener"`, `"updater"`, and `"default"`. `"default"` is always used, and never needs to be passed. */
+    type: 'listener';
+  }
+): boolean;
+export function registerFunc(
+  func: HandlerFunc | ListenerFunc,
+  optionsObj: {
+    /** Array that contains the types of specialized functions that apply to the functions being registered. Valid types are `"opener"`, `"updater"`, and `"default"`. `"default"` is always used, and never needs to be passed. */
+    type?: Array<'opener' | 'updater' | 'new' | 'all'> | 'listener'; // ('opener' | 'updater' | 'new' | 'all')[] | ('listener')[];
   } = {}
-) {
+): boolean {
   if (typeof func !== 'function' || !func.name) {
     error(
       `registerFunc must be passed a Function with a name. No anonymous or arrow functions!`
     );
     return false;
+  } else {
+    return registerFuncs(
+      { [func.name]: func as HandlerFunc },
+      optionsObj as {}
+    );
   }
-  return registerFuncs({ [func.name]: func }, optionsObj);
+}
+
+export function registerListener(func: ListenerFunc): boolean {
+  return registerFunc(func, { type: 'listener' });
 }
 
 export function setActionCalls({

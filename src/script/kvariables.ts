@@ -15,7 +15,7 @@ export const kvars = {
   /**
    * This stores the name of your sheet for use in the logging functions {@link log} and {@link debug}. Accessible by `k.sheetName`
    */
-  sheetName: 'kScaffold Powered Sheet',
+  sheetName: 'kScaffold-jsx Powered Sheet',
   /**
    * This stores the version of your sheet for use in the logging functions{@link log} and {@link debug}. It is also stored in the sheet_version attribute on your character sheet. Accessible via `k.version`
    */

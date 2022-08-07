@@ -1,5 +1,8 @@
 import { default as clsx } from 'clsx';
-import { ReactNode } from 'react';
+import { cloneElement, ReactElement, ReactNode } from 'react';
+import { isElement } from 'react-is';
+import { createSlot } from './components/Slot.js';
+import { flattenChildren } from './utils/flattenChildren.js';
 
 export interface RollTemplateProps {
   name: string;
@@ -54,13 +57,33 @@ export function CharacterLink() {
           [{'{{character_name}}'}](
           {'http://journal.roll20.net/character/{{character_id}}'})
         </h4>
-      </TemplateConditional>
-      <TemplateConditional fieldBool="chracter_id" invert>
-        <h4 className="character_name">{'{{character_name}}'}</h4>
+        <TemplateConditional.Else>
+          <h4 className="character_name">{'{{character_name}}'}</h4>
+        </TemplateConditional.Else>
       </TemplateConditional>
     </TemplateConditional>
   );
 }
+
+export function toTemplateAttr(attr: string) {
+  return `{{${attr}}}`;
+}
+
+export function TemplateAttr({
+  children,
+}: {
+  children: string | string[];
+}): JSX.Element {
+  return (
+    <>
+      {'{{'}
+      {children}
+      {'}}'}
+    </>
+  );
+}
+
+const ElseSlot = createSlot('Else');
 
 export function templateConditional(
   value: string,
@@ -78,14 +101,31 @@ export function TemplateConditional({
   invert?: boolean;
   children?: ReactNode;
 }) {
+  let elseSlot: ReactElement | undefined;
+  const defaultSlot = flattenChildren(children).map((baseChild) => {
+    if (!isElement(baseChild)) {
+      return baseChild;
+    }
+    if (baseChild.type === ElseSlot && !baseChild.props['data-used']) {
+      elseSlot = cloneElement(baseChild, { 'data-used': 'true' });
+      return undefined;
+    }
+    return baseChild;
+  });
   return (
     <>
       {`{{${invert ? '^' : '#'}${fieldBool}}}`}
-      {children}
+      {defaultSlot}
       {`{{/${fieldBool}}}`}
+      {elseSlot ? (
+        <TemplateConditional fieldBool={fieldBool} invert={!invert}>
+          {elseSlot}
+        </TemplateConditional>
+      ) : undefined}
     </>
   );
 }
+TemplateConditional.Else = ElseSlot;
 export type TemplateHelperFunction =
   | 'rollWasCrit'
   | 'rollWasFumble'
@@ -93,7 +133,7 @@ export type TemplateHelperFunction =
   | 'rollGreater'
   | 'rollLess'
   | 'rollBetween'
-  | 'allProps';
+  | 'allprops';
 interface TemplateHelperProps {
   func?: TemplateHelperFunction;
   values?: string;
@@ -107,33 +147,52 @@ export function TemplateHelper({
   children,
 }: TemplateHelperProps) {
   const funcValue = func ? `${func}()` : '';
+  let elseSlot: ReactElement | undefined;
+  const defaultSlot = flattenChildren(children).map((baseChild) => {
+    if (!isElement(baseChild)) {
+      return baseChild;
+    }
+    if (baseChild.type === ElseSlot && !baseChild.props['data-used']) {
+      elseSlot = cloneElement(baseChild, { 'data-used': 'true' });
+      return undefined;
+    }
+    return baseChild;
+  });
   return (
     <>
       {`{{${invert ? '#^' : '#'}${funcValue} ${values}}}`}
-      {children}
+      {defaultSlot}
       {`{{/${invert ? '^' : ''}${funcValue} ${values}}}`}
+      {elseSlot ? (
+        <TemplateHelper func={func} values={values} invert={!invert}>
+          {elseSlot}
+        </TemplateHelper>
+      ) : undefined}
     </>
   );
 }
-// type TemplateHelperSansFunc = Omit<TemplateHelperProps, "func">;
-// export function RollWasCrit(props: TemplateHelperSansFunc) {
-//   return <TemplateHelper {...props} func="rollWasCrit" />;
-// }
-// export function RollWasFumble(props: TemplateHelperSansFunc) {
-//   return <TemplateHelper {...props} func="rollWasFumble" />;
-// }
-// export function RollTotal(props: TemplateHelperSansFunc) {
-//   return <TemplateHelper {...props} func="rollTotal" />;
-// }
-// export function RollGreater(props: TemplateHelperSansFunc) {
-//   return <TemplateHelper {...props} func="rollGreater" />;
-// }
-// export function RollLess(props: TemplateHelperSansFunc) {
-//   return <TemplateHelper {...props} func="rollLess" />;
-// }
-// export function RollBetween(props: TemplateHelperSansFunc) {
-//   return <TemplateHelper {...props} func="rollBetween" />;
-// }
-// export function AllProps(props: TemplateHelperSansFunc) {
-//   return <TemplateHelper {...props} func="allProps" />;
-// }
+TemplateHelper.Else = ElseSlot;
+
+/**
+ * A basic display for an attribute based on a conditional of the same name
+ */
+export function TemplateConditionalRow({
+  fieldBool,
+  label = fieldBool,
+  className,
+}: {
+  fieldBool: string;
+  className?: string;
+  label?: string;
+}) {
+  return (
+    <TemplateConditional fieldBool={fieldBool}>
+      <div className={clsx('template-row', className)}>
+        <h5 data-i18n={label} className="template-row--header"></h5>
+        <span className="description template-row--description">
+          <TemplateAttr>{fieldBool}</TemplateAttr>
+        </span>
+      </div>
+    </TemplateConditional>
+  );
+}

@@ -5,17 +5,14 @@ export interface RollTemplateProps {
   children?: ReactNode;
 }
 
-declare module 'csstype' {
-  interface Properties {
-    '--quick-width'?: string;
-  }
-}
 declare global {
   namespace React {
     interface HTMLAttributes<T> {
       inert?: 'true' | 'false' | '';
       'data-i18n'?: string;
       'data-i18n-title'?: string;
+      'data-i18n-alt'?: string;
+      'data-i18n-placeholder'?: string;
     }
   }
 
